@@ -1,0 +1,4 @@
+observable_pointcloud_map_creator_node:
+  ros__parameters:
+    input_pcd_path: "/home/keisoku/map_ws/data/input.pcd"
+    
