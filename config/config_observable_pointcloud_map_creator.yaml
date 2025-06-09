@@ -1,4 +1,7 @@
 observable_pointcloud_map_creator_node:
   ros__parameters:
-    input_pcd_path: "/home/keisoku/map_ws/data/input.pcd"
-    
+    input_pcd_path: "/home/kazuma/map_ws/input/indoor_outdoor_raw.pcd"
+    output_dir: "output"
+    grid_size: 20.0
+    voxel_leaf_size_: 1.0
+    hpr_radius: 50.0
