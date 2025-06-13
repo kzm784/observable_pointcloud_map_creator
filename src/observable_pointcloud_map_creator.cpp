@@ -34,6 +34,26 @@ ObservablePointcloudMapCreator::ObservablePointcloudMapCreator(const rclcpp::Nod
     }
     RCLCPP_INFO(get_logger(), "[Init] Loaded %zu points from PCD", original_cloud_->size());
 
+    // Convert to Open3D cloud once
+    o3d_global_.points_.reserve(original_cloud_->size());
+    for (const auto &p : original_cloud_->points) {
+        o3d_global_.points_.emplace_back(p.x, p.y, p.z);
+    }
+
+    // Compute hpr_radius if not set
+    if (hpr_radius_ <= 0.0) {
+        pcl::PointXYZ minPt, maxPt;
+        pcl::getMinMax3D(*original_cloud_, minPt, maxPt);
+        double dx = maxPt.x - minPt.x;
+        double dy = maxPt.y - minPt.y;
+        double dz = maxPt.z - minPt.z;
+        double diameter = std::sqrt(dx * dx + dy * dy + dz * dz);
+        hpr_radius_ = diameter * 100.0;
+        RCLCPP_INFO(get_logger(), "[Auto HPR Radius] diameter=%.2f -> hpr_radius=%.2f", diameter, hpr_radius_);
+    } else {
+        RCLCPP_INFO(get_logger(), "[HPR Radius] Using provided hpr_radius=%.2f", hpr_radius_);
+    }
+
     // Remove outliers globally
     RCLCPP_INFO(get_logger(), "[SOR] Starting global outlier removal");
     filtered_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
@@ -160,20 +180,13 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr ObservablePointcloudMapCreator::processLocal
     // ボクセルグリッドフィルタされた地面点群だけ見たいとき
     // return vg_cloud;
 
-    // Prepare Open3D cloud for HPR
-    open3d::geometry::PointCloud o3d_global;
-    o3d_global.points_.reserve(original_cloud_->size());
-    for (const auto &p : original_cloud_->points) {
-        o3d_global.points_.emplace_back(p.x, p.y, p.z);
-    }
-
     // Hidden Point Removal
     RCLCPP_DEBUG(get_logger(), "[HPR] Performing Hidden Point Removal with radius %.2f", hpr_radius_);
     std::unordered_set<size_t> visible_idx;
     for (size_t i = 0; i < vg_cloud->size(); ++i) {
         const auto &vp = vg_cloud->points[i];
         try {
-            auto [mesh, indices] = o3d_global.HiddenPointRemoval(
+            auto [mesh, indices] = o3d_global_.HiddenPointRemoval(
             Eigen::Vector3d(vp.x, vp.y, vp.z + 1.0), hpr_radius_);
             // RCLCPP_INFO(get_logger(), "[HPR] Viewpoint %zu gave %zu indices", i, indices.size());
             for (size_t id : indices) {

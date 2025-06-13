@@ -32,6 +32,8 @@ private:
   pcl::PointCloud<pcl::PointXYZ>::Ptr original_cloud_;
   pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud_;
   pcl::PointCloud<pcl::PointXYZ>::Ptr ground_global_;
+  open3d::geometry::PointCloud o3d_global_;
+
 
   std::string input_pcd_path_;
   std::string output_dir_;

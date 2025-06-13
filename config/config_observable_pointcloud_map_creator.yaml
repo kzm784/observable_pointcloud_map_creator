@@ -4,4 +4,4 @@ observable_pointcloud_map_creator_node:
     output_dir: "output"
     grid_size: 30.0
     voxel_leaf_size_: 0.5
-    hpr_radius: 1000.0
+    hpr_radius: -1.0
