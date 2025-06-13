@@ -30,6 +30,7 @@ private:
   pcl::PointCloud<pcl::PointXYZ>::Ptr processLocalGrid(const pcl::PointCloud<pcl::PointXYZ>::Ptr & local);
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr original_cloud_;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud_;
   pcl::PointCloud<pcl::PointXYZ>::Ptr ground_global_;
 
   std::string input_pcd_path_;

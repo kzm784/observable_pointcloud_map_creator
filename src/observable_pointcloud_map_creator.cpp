@@ -23,29 +23,32 @@ ObservablePointcloudMapCreator::ObservablePointcloudMapCreator(const rclcpp::Nod
 
     std::filesystem::create_directories(output_dir_);
 
+    // Debug
+    // std::filesystem::create_directories(output_dir_ + "/debug");
+
     // Load input PCD
     original_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
     if (pcl::io::loadPCDFile(input_pcd_path_, *original_cloud_) < 0) {
         RCLCPP_FATAL(get_logger(), "[Error] Failed to load PCD: %s", input_pcd_path_.c_str());
-        rclcpp::shutdown();
         return;
     }
     RCLCPP_INFO(get_logger(), "[Init] Loaded %zu points from PCD", original_cloud_->size());
 
     // Remove outliers globally
     RCLCPP_INFO(get_logger(), "[SOR] Starting global outlier removal");
+    filtered_cloud_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
     pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
     sor.setInputCloud(original_cloud_);
     sor.setMeanK(50);
     sor.setStddevMulThresh(1.0);
-    sor.filter(*original_cloud_);
-    RCLCPP_INFO(get_logger(), "[SOR] After removal: %zu points", original_cloud_->size());
+    sor.filter(*filtered_cloud_);
+    RCLCPP_INFO(get_logger(), "[SOR] After removal: %zu points", filtered_cloud_->size());
 
     // Extract ground points
     RCLCPP_INFO(get_logger(), "[PMF] Extracting ground points");
     std::vector<int> ground_indices;
     pcl::ProgressiveMorphologicalFilter<pcl::PointXYZ> pmf;
-    pmf.setInputCloud(original_cloud_);
+    pmf.setInputCloud(filtered_cloud_);
     pmf.setMaxWindowSize(20);
     pmf.setSlope(1.0f);
     pmf.setInitialDistance(0.5f);
@@ -54,17 +57,23 @@ ObservablePointcloudMapCreator::ObservablePointcloudMapCreator(const rclcpp::Nod
 
     ground_global_ = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
     for (int idx : ground_indices) {
-        if (idx >= 0 && idx < static_cast<int>(original_cloud_->size())) {
-            ground_global_->push_back(original_cloud_->points[idx]);
+        if (idx >= 0 && idx < static_cast<int>(filtered_cloud_->size())) {
+            ground_global_->push_back(filtered_cloud_->points[idx]);
         }
     }
     RCLCPP_INFO(get_logger(), "[PMF] Ground points count: %zu", ground_global_->size());
+
+    // Debug
+    // std::ostringstream oss;    
+    // oss << output_dir_ << "/debug/ground_global.pcd";
+    // pcl::io::savePCDFileBinary(oss.str(), *ground_global_);
+    // RCLCPP_DEBUG(get_logger(), "[PMF] Saved %zu points to %s", ground_global_->size(), oss.str().c_str());
 
     // Start processing each grid cell
     RCLCPP_INFO(get_logger(), "[Grid] Splitting into cells and processing");
     splitAndProcessGrid(ground_global_);
 
-    rclcpp::shutdown();
+    RCLCPP_INFO(get_logger(), "[Grid] All process has done.");
 }
 
 void ObservablePointcloudMapCreator::splitAndProcessGrid(const pcl::PointCloud<pcl::PointXYZ>::Ptr & cloud)
@@ -97,10 +106,22 @@ void ObservablePointcloudMapCreator::splitAndProcessGrid(const pcl::PointCloud<p
             RCLCPP_DEBUG(get_logger(), "[Grid] Cell (%d,%d) local size: %zu", ix, iy, local->size());
             if (local->size() < 3) continue;
 
+            // Debug
+            // std::ostringstream oss;
+            // oss << output_dir_ << "/debug/ground_local_" << ix << "_" << iy << ".pcd";
+            // pcl::io::savePCDFileBinary(oss.str(), *local);
+            // RCLCPP_DEBUG(get_logger(), "[Grid] Saved %zu points to %s", local->size(), oss.str().c_str());
+
             auto result = processLocalGrid(local);
             RCLCPP_DEBUG(get_logger(), "[Grid] Cell (%d,%d) result size: %zu", ix, iy, result->size());
             if (result && !result->empty()) {
                 std::ostringstream oss;
+                
+                // Debug
+                // ボクセルグリッドフィルタリングされた地面点群
+                // oss << output_dir_ << "/debug/ground_local_filtered_" << ix << "_" << iy << ".pcd";
+                
+                // HPR適用後
                 oss << output_dir_ << "/grid_" << ix << "_" << iy << ".pcd";
                 pcl::io::savePCDFileBinary(oss.str(), *result);
                 RCLCPP_INFO(get_logger(), "[Grid] Saved %zu points to %s", result->size(), oss.str().c_str());
@@ -134,6 +155,10 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr ObservablePointcloudMapCreator::processLocal
     vg.filter(*vg_cloud);
     RCLCPP_DEBUG(get_logger(), "[HPR] After VoxelGrid: %zu points", vg_cloud->size());
     if (vg_cloud->empty()) return vg_cloud;
+    
+    // Debug
+    // ボクセルグリッドフィルタされた地面点群だけ見たいとき
+    // return vg_cloud;
 
     // Prepare Open3D cloud for HPR
     open3d::geometry::PointCloud o3d_global;
